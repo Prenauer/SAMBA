@@ -2,8 +2,8 @@ Package: SAMBA
 Type: Package
 Title: CRISPR Screen analysis with moderated Bayesian statistics and adaptive gene aggregation scoring
 Version: 1.1.0
-Authors@R: c(person("Paul", "Renauer", role = c("aut", "cre"),
-                     email = "paul.renauer@yale.edu"),
+Authors@R: person("Paul", "Renauer", role = c("aut", "cre"),
+                     email = "paul.renauer@yale.edu")
 Author: Paul Renauer [aut, cre]
 Maintainer: Paul Renauer <paul.renauer@yale.edu>
 Description: This analysis algorithm employs generalized linear models (GLMs) to fit CRISPR 
