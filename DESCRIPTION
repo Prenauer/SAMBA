@@ -2,9 +2,8 @@ Package: SAMBA
 Type: Package
 Title: CRISPR Screen analysis with moderated Bayesian statistics and adaptive gene aggregation scoring
 Version: 1.1.0
-Authors@R: person("Paul", "Renauer", role = c("aut", "cre"),
-                     email = "paul.renauer@yale.edu")
-Author: Paul Renauer [aut, cre]
+Author: person("Paul", "Renauer", , "paul.renauer@ yale.edu", role = c("aut", "cre"),
+    comment = c(ORCID = "0000-0002-8747-0552"))
 Maintainer: Paul Renauer <paul.renauer@yale.edu>
 Description: This analysis algorithm employs generalized linear models (GLMs) to fit CRISPR 
     screen data, and it analyzes guide-level enrichment/depletion using moderated Bayesian 
@@ -12,12 +11,14 @@ Description: This analysis algorithm employs generalized linear models (GLMs) to
     with a null distribution to calculate enrichment and depletion for the screen.
 License: GPL (>= 3)
 Encoding: UTF-8
-LazyData: true
 Imports: 
-    dplyr,
+    Rcpp (>= 1.0.9),
+    plyr,
     edgeR,
     limma,
-    plyr,
-    Rcpp (>= 1.0.9),
     stringr
+Depends:
+    dplyr
 LinkingTo: Rcpp
+LazyData: true
+RoxygenNote: 7.2.1
