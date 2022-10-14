@@ -1,6 +1,10 @@
 # SAMBA
 CRISPR Screen analysis with moderated Bayesian statistics and adaptive gene aggregation scoring
 
+# Install
+install.packages(devtools)
+
+devtools::install_github('Prenauer/SAMBA')
 
 # Create dummy screen data
 samples.screen <- sapply(1:4, function(x){ rnbinom(80000, mu = 1000, size = 0.2) })
@@ -26,7 +30,7 @@ design <- model.matrix(~ Screen)
 
 
 # Run analysis
-results <- Samba(data = counts, design = design, coefficient = 'Screen')
+results <- Samba(data = counts, design = design, coefficient = 'Screen', score.method = 'GeneScore')
 
 View(results$GeneResults)
 
