@@ -27,7 +27,7 @@ SAMBA <- function(data, design, coefficient = NULL, contrast = NULL, ntc.as.null
 
     dge <- Preprocess_Samba(data = data, design = design)
     sgRes <- Analyze_Samba_Guides(dge = dge, coefficient = coefficient, contrast = contrast, file.prefix = file.prefix)
-    geneRes <- Analyze_Samba_Genes(sgRes = sgRes, score.method = score.method, file.prefix = file.prefix)
+    geneRes <- Analyze_Samba_Genes(sgRes = sgRes,ntc.as.null.dist = ntc.as.null.dist, score.method = score.method, file.prefix = file.prefix)
 
     return(list(GuideResults = sgRes, GeneResults = geneRes))
 }
