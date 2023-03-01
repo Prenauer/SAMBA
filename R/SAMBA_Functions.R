@@ -151,9 +151,6 @@ Analyze_Samba_Guides <- function(dge, method = 'QLF', design = NULL, coefficient
     if(!is.null(file.prefix)){
         saveRDS(fit, file = paste0(file.prefix, '_FittedData.rds'))
         write.table(sgRes, file = paste0(file.prefix, '_GuideLevelResults.txt'), sep = '\t', quote = F, row.names = F)
-        pdf(file = paste0(file.prefix, '_qqplot.pdf'), height = 4, width = 4)
-        gof(fit, plot = T)
-        dev.off()
     }
 
     # return data
