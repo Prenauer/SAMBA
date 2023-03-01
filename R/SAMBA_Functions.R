@@ -358,7 +358,7 @@ RandomIndexGenerator <- function(sgPerGene, nTotalGuides){
     randomSeeds <- sample(1:nIterations, replace = F)
     randData <- lapply(1:nIterations, function(i) {
         set.seed(randomSeeds[i])
-        sample(1:nTotalGuides, size = sgPerGene[i], replace = F)
+        sample(1:nTotalGuides, size = min(nTotalGuides,sgPerGene[i]), replace = F)
     })
     return(randData)
 }
