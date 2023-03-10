@@ -195,7 +195,7 @@ Analyze_Samba_Genes <- function(sgRes, ntc.as.null.dist = T, score.method = 'Met
 
     # save data
     if(!is.null(file.prefix)){
-        write.table(sgRes, file = paste0(file.prefix, '_GeneLevelResults.txt'), sep = '\t', quote = F, row.names = F)
+        write.table(output, file = paste0(file.prefix, '_GeneLevelResults.txt'), sep = '\t', quote = F, row.names = F)
     }
 
     return(output)
