@@ -1,4 +1,4 @@
-#' Samba
+#' samba
 #'
 #' This is an all-in-one function to preprocesses and analyze read count data from a CRISPR
 #' screen. The structure of the input data is assumed to have columns labeled "sgRNA" and
