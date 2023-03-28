@@ -36,52 +36,67 @@ Samba <- function(data, design, coefficient = NULL, contrast = NULL, ntc.as.null
 #' @param design design matrix for the samples in "data". Note: The order of the rows must match that of the data read-counts.
 #' @return DGEList object of the edgeR package.
 #' @export
-Preprocess_Samba <- function(data, design){
+Preprocess_Samba <- function(data, design, min.guides = 1, pseudocount = 4, normalization.method = 'TMMwsp'){
     cat('Starting preprocessing.\n')
     # Default settings
     hdr.gene = 'Gene'
     hdr.guide = 'sgRNA'
-    min.guides = 1
-    pseudocount = 4
     dispersion.method = 'GLM'
 
-    # check input
-    data <- data.frame(data)
+    # prep input
+    sgInfo <- data.frame(data[,1:2])
+    data <- data.frame(data[,-c(1:2)])
+    rownames(data) <- sgInfo[, hdr.guide]
+    rownames(sgInfo) <- sgInfo[, hdr.guide]
     design <- as.matrix(design)
-    if(sum(colnames(data) %in% c(hdr.gene, hdr.guide)) != 2) warning('Count data is missing the columns: "Guide" and "Gene"!')
-    if((nrow(design) + 2) != ncol(data)) warning('Design matrix has incorrect number of rows!')
-    if((mode(design) != 'numeric') & (mode(design) != 'integer')) warning('Design matrix does not have integer/numeric format!')
+  
+    # check input
+    if (sum(colnames(sgInfo) %in% c(hdr.gene, hdr.guide)) != 2) 
+        warning("Count data is missing the columns: \"Guide\" and \"Gene\"!")
+    if (nrow(design) != ncol(data)) 
+        warning("Design matrix has incorrect number of rows!")
+    if ((mode(design) != "numeric") & (mode(design) != "integer")) 
+        warning("Design matrix does not have integer/numeric format!")
 
     # get sample groups
-    if(ncol(design) == 2){
-        group <- as.integer(design[,-1])
+    if(ncol(design) == 2) {
+        group <- as.integer(design[, -1])
     } else {
-        group <- as.integer(rowSums(design[,-1]))
+        group <- as.integer(rowSums(design[, -1]))
     }
     if(length(unique(group)) >= (nrow(design))) {
         group = NULL
-        cat('No sample grouping will be used!\n')
+        cat("No sample grouping will be used!\n")
     }
 
-    # make/filter DGE object
-    rownames(data) <- data[,hdr.guide]
-    if(min.guides > 0){
-        dge <- edgeR::DGEList(data[,-c(1:2)], remove.zeros = F, group = group)
-        keep.exprs <- FilterCountData(dge = dge, group = group, min.guides = min.guides)
-        dge <- edgeR::DGEList(data[keep.exprs,-c(1:2)] + pseudocount, remove.zeros = T, group = group)
+    # filter data
+    if (min.guides > 0) {
+	    if (!is.null(group)) {
+	        samples.screen <- which(group != 0)
+	    } else {
+	        samples.screen <- colnames(data)
+	    }
+	    keep.exprs = rowSums(data)
+	    keep.exprs <- keep.exprs[keep.exprs > min.guides] %>% names()
+	    cat(paste0("   Removed ", nrow(data) - length(keep.exprs), 
+	        " of ", nrow(data), " guides.\n"))
     } else {
-        dge <- edgeR::DGEList(data[,-c(1:2)] + pseudocount, remove.zeros = T, group = group)
+    	keep.exprs <- rownames(data)
     }
+    data <- data[keep.exprs,]
+    sgInfo <- sgInfo[keep.exprs,]
 
-
+    # normalize data
+    cat("Performing normalization: ",normalization.method,"\n")
+    if(normalization.method == 'uq2'){
+      data <- uq.pgQ2(data.frame(data), 50)
+      normalization.method <- 'none'
+    }
+    dge <- edgeR::DGEList(ndata, remove.zeros = T, group = group)
+    dge <- edgeR::calcNormFactors(dge, method = normalization.method)
+ 
     # generate guide weights based on detection across samples
-    dge <- WeighGuides(dge = dge)
-
-    # calculate size factors
-    cat('Calculating TMM-wsp size factors\n')
-    dge <- edgeR::calcNormFactors(dge, method = 'TMMwsp')
-    cat('   Size factor summary:\n')
-    print(summary(dge$samples$norm.factors))
+    #dge <- WeighGuides(dge = dge)
 
     # calculate size factors and dispersion
     cat('Calculating dispersions ...\n')
@@ -94,7 +109,7 @@ Preprocess_Samba <- function(data, design){
 
     # return DGE object
     dge$Design <- design
-    dge$GuideMap <- data[,c(hdr.guide, hdr.gene)]
+    dge$GuideMap <- sgInfo
     cat('Preprocessing complete!\n')
     return(dge)
 }
@@ -385,6 +400,50 @@ WtSumScore <- function(scores,sg.threshold){
     return(top.sg + fdr.sg)
 }
 
+#' UpperQuantNorm
+#'
+#' This function normalizes a count matrix by the 75th percentile of each sample.
+#'
+#' @param X Count matrix with genes as rows and samples as columns.
+#' @return Normalized matrix.
+#' @export
+UpperQuantNorm <- function(X){
+  X<-X+0.1
+  upperQ<-apply(X,2,function(y) quantile(y, 0.75))
+  f<-upperQ/mean(upperQ) # calculate normalization factor
+  res<-scale(X,center=FALSE,scale=f) 
+  return(res)
+}
+
+#' UpperQuantNorm2Step
+#'
+#' This function performs a 2-step normalization, first with quantile normalization
+#' of samples, then by median normalization of gRNA values.
+#'
+#' @param X Count matrix with genes as rows and samples as columns.
+#' @param f Multiplication factor for nornalized data.
+#' @return Normalized matrix.
+#' @export
+UpperQuantNorm2Step <-function(X, f = 50){
+  # per gene normalization by Median: pgQ2
+  # X: a matrix of data with the multiplication of factor (f) as:
+  # f=100 as a default
+
+  uq.res <- UpperQuantNorm(X) #  perform UQ normalization per sample
+  
+  ## perform per gene nomralization
+  m<-apply(uq.res,1, median)
+  
+  idx<-which(m==0) # avoid 0 median 
+  m[idx]=0.1
+  
+  si<-m/f # calculate normalization factor
+  X1<-scale(t(uq.res),center=FALSE,scale=si)
+  res<-t(X1)
+  return(res)  
+}
 
 
 
+                
+                
