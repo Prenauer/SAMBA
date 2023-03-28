@@ -89,7 +89,7 @@ Preprocess_Samba <- function(data, design, min.guides = 1, pseudocount = 4, norm
     # normalize data
     cat("Performing normalization: ",normalization.method,"\n")
     if(normalization.method == 'uq2'){
-      data <- uq.pgQ2(data.frame(data), 50)
+      data <- UpperQuantNorm2Step(data.frame(data), 50)
       normalization.method <- 'none'
     }
     dge <- edgeR::DGEList(ndata, remove.zeros = T, group = group)
