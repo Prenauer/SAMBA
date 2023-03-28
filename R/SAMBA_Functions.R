@@ -92,7 +92,7 @@ Preprocess_Samba <- function(data, design, min.guides = 1, pseudocount = 4, norm
       data <- UpperQuantNorm2Step(data.frame(data), 50)
       normalization.method <- 'none'
     }
-    dge <- edgeR::DGEList(ndata, remove.zeros = T, group = group)
+    dge <- edgeR::DGEList(data, remove.zeros = T, group = group)
     dge <- edgeR::calcNormFactors(dge, method = normalization.method)
  
     # generate guide weights based on detection across samples
