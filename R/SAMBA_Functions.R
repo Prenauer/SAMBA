@@ -15,10 +15,10 @@
 #' @param file.prefix Prefix for writing output files.
 #' @return DGEList object of the edgeR package.
 #' @export
-Samba <- function(data, design, coefficient = NULL, contrast = NULL, ntc.as.null.dist = T,
+samba <- function(data, design, coefficient = NULL, contrast = NULL, ntc.as.null.dist = T, normalization.method = 'TMMwsp',
                   score.method = 'MetaAnalysis', test.method = 'QLF', GuideMap = NULL, file.prefix = NULL){
 
-    dge <- Preprocess_Samba(data = data, design = design)
+    dge <- Preprocess_Samba(data = data, design = design, normalization.method = normalization.method)
     sgRes <- Analyze_Samba_Guides(dge = dge, coefficient = coefficient, method = test.method, contrast = contrast, file.prefix = file.prefix)
     geneRes <- Analyze_Samba_Genes(sgRes = sgRes, ntc.as.null.dist = ntc.as.null.dist, score.method = score.method, file.prefix = file.prefix)
 
