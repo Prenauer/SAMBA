@@ -221,6 +221,7 @@ Analyze_Samba_Genes <- function(sgRes, ntc.as.null.dist = T, score.method = 'Met
         output <- MetaAnalysisSamba(data = sgRes, nullData = nullData, fdr.threshold = fdr.threshold, direction = 1)
         cat('Done!\n')
     }
+    output <- output[order(output$pval_pos, decreasing = F),]
 
     # save data
     if(!is.null(file.prefix)){
