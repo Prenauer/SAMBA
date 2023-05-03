@@ -89,7 +89,7 @@ Preprocess_Samba <- function(data, design, min.guides = 1, pseudocount = 4, grou
     # normalize data
     cat("Performing normalization: ",normalization.method,"\n")
     if(normalization.method == 'uq2'){
-      data <- UpperQuantNorm2Step(data.frame(data), 50)
+      data <- UpperQuantNorm2Step(data.frame(data), 100)
       normalization.method <- 'none'
     }
     if(normalization.method == 'total'){
