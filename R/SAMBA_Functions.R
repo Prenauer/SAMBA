@@ -76,7 +76,7 @@ Preprocess_Samba <- function(data, design, min.guides = 1, pseudocount = 4, norm
 	    } else {
 	        samples.screen <- colnames(data)
 	    }
-	    keep.exprs = rowSums(data)
+	    keep.exprs = rowSums(data[,samples.screen)
 	    keep.exprs <- keep.exprs[keep.exprs > min.guides] %>% names()
 	    cat(paste0("   Removed ", nrow(data) - length(keep.exprs), 
 	        " of ", nrow(data), " guides.\n"))
