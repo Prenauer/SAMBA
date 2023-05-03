@@ -92,6 +92,10 @@ Preprocess_Samba <- function(data, design, min.guides = 1, pseudocount = 4, grou
       data <- UpperQuantNorm2Step(data.frame(data), 50)
       normalization.method <- 'none'
     }
+    if(normalization.method == 'total'){
+        data <- apply(data, 2, function(x) 1e6*x/sum(x))
+        normalization.method <- 'none'
+    }
     dge <- edgeR::DGEList(data, remove.zeros = T, group = group)
     dge <- edgeR::calcNormFactors(dge, method = normalization.method)
  
