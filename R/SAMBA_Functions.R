@@ -36,7 +36,7 @@ Samba <- function(data, design, coefficient = NULL, contrast = NULL, ntc.as.null
 #' @param design design matrix for the samples in "data". Note: The order of the rows must match that of the data read-counts.
 #' @return DGEList object of the edgeR package.
 #' @export
-Preprocess_Samba <- function(data, design, min.guides = 1, pseudocount = 4, normalization.method = 'TMMwsp'){
+Preprocess_Samba <- function(data, design, min.guides = 1, pseudocount = 4, group = NULL, normalization.method = 'TMMwsp'){
     cat('Starting preprocessing.\n')
     # Default settings
     hdr.gene = 'Gene'
@@ -59,15 +59,15 @@ Preprocess_Samba <- function(data, design, min.guides = 1, pseudocount = 4, norm
         warning("Design matrix does not have integer/numeric format!")
 
     # get sample groups
-    if(ncol(design) == 2) {
-        group <- as.integer(design[, -1])
-    } else {
-        group <- as.integer(rowSums(design[, -1]))
+    if(is.null(group)){
+        if(ncol(design) == 2) {
+            group <- as.integer(design[, 2])
+        } else {
+            group <- as.integer(design[, ncol(design)])
+        }
     }
-    if(length(unique(group)) >= (nrow(design))) {
-        group = NULL
-        cat("No sample grouping will be used!\n")
-    }
+    if(length(unique(group)) >= (nrow(design))) group = NULL
+
 
     # filter data
     if (min.guides > 0) {
@@ -76,7 +76,7 @@ Preprocess_Samba <- function(data, design, min.guides = 1, pseudocount = 4, norm
 	    } else {
 	        samples.screen <- colnames(data)
 	    }
-	    keep.exprs = rowSums(data[,samples.screen)
+	    keep.exprs = rowSums(data[,samples.screen])
 	    keep.exprs <- keep.exprs[keep.exprs > min.guides] %>% names()
 	    cat(paste0("   Removed ", nrow(data) - length(keep.exprs), 
 	        " of ", nrow(data), " guides.\n"))
