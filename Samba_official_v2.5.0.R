@@ -1,10 +1,3 @@
-#' @import {plyr}
-#' @import {dplyr}
-#' @import {stringr}
-#' @import {edgeR}
-#' @import {limma}
-
-
 #' Samba
 #'
 #' This is an all-in-one function to preprocesses and analyze read count data from a CRISPR
@@ -16,19 +9,18 @@
 #' @param coefficient character name or vector, indicating which coefficient of the linear model is tested to be equal to zero.
 #' @param contrast contrast matrix, indicating the contrast(s) of the linear model to be tested as equal to zero (optional).
 #' @param null.dist.gene logical, indicating the gene ID for control guides. This is used to generate a null distribution for gene-level analyses. Defaults to "NTC", but this can parameter can also be set to NULL to use all guides for the null distribution.
-#' @param score.method character, indicating whether to use the 'MetaAnalysis' or 'GeneScore' method to perform gene-level analysis.
+#' @param score.method character, indicating whether to use the 'KS' (Kolmogorov-Smirnov), 'MetaAnalysis', or 'GeneScore' method to perform gene-level analysis.
 #' @param test.method character, indicating whether to use 'QLF' or 'LRT' tests.
 #' @param GuideMap data.frame that maps the guides of the library to their respective genes (optional). Must have "sgRNA" and "Gene" columns.
 #' @param file.prefix Prefix for writing output files.
 #' @return DGEList object of the edgeR package.
 #' @export
-Samba <- function(data, design, coefficient = NULL, contrast = NULL, null.dist.gene = 'NTC', normalization.method = 'TMMwsp',
-                  score.method = 'KS', test.method = 'QLF', dispersion.estimate.method='GLMTagwise', GuideMap = NULL, 
-                  use.nullData=T, file.prefix = NULL){
+Samba <- function(data, design, coefficient = NULL, contrast = NULL, null.dist.gene = 'NTC', normalization.method = 'TMMwsp', uq2.f=100,
+                  score.method = 'KS', test.method = 'QLF', GuideMap = NULL, file.prefix = NULL){
 
-    dge <- Preprocess_Samba(data = data, design = design, normalization.method = normalization.method, dispersion.estimate.method=dispersion.estimate.method)
+    dge <- Preprocess_Samba(data = data, design = design, normalization.method = normalization.method, uq2.f=uq2.f)
     sgRes <- Analyze_Samba_Guides(dge = dge, coefficient = coefficient, method = test.method, contrast = contrast, file.prefix = file.prefix)
-    geneRes <- Analyze_Samba_Genes(sgRes = sgRes, null.dist.gene = null.dist.gene, score.method = score.method, use.nullData=use.nullData, file.prefix = file.prefix)
+    geneRes <- Analyze_Samba_Genes(sgRes = sgRes, null.dist.gene = null.dist.gene, score.method = score.method, file.prefix = file.prefix)
 
     return(list(GuideResults = sgRes, GeneResults = geneRes))
 }
@@ -44,7 +36,7 @@ Samba <- function(data, design, coefficient = NULL, contrast = NULL, null.dist.g
 #' @param design design matrix for the samples in "data". Note: The order of the rows must match that of the data read-counts.
 #' @return DGEList object of the edgeR package.
 #' @export
-Preprocess_Samba <- function(data, design, min.guides = 1, pseudocount = 4, group = NULL, ctrl.samples=NULL, normalization.method = 'TMMwsp', dispersion.estimate.method='GLMTagwise', uq2.f=100){
+Preprocess_Samba <- function(data, design, min.guides = 1, pseudocount = 4, group = NULL, normalization.method = 'TMMwsp', dispersion.estimate.method='GLMTagwise', uq2.f=100){
     cat('Starting preprocessing.\n')
     # Default settings
     hdr.gene = 'Gene'
@@ -103,28 +95,11 @@ Preprocess_Samba <- function(data, design, min.guides = 1, pseudocount = 4, grou
         }
     }
     
-    #  Make DGE object and filter counts 
     data <- data[keep.guide,]
     sgInfo <- sgInfo[keep.guide,]
-    dge <- edgeR::DGEList(data, remove.zeros = T, group = group)
-    
-    # Calculate sparsity factor after filtering, but before data normalization
-    Calc_Sparse_Factor <- function(dge){
-  	total_counts <- dim(dge$counts[, as.logical(dge$Design[,2])])
-  	total_counts <- total_counts[1] * total_counts[2]
-  	total_zeros <- sum(dge$counts[, as.logical(dge$Design[,2])] == 0)
-  	sparse_factor <- min(total_zeros / total_counts / 0.40, 1) # note: 0.4 (rounded) is empirically a maximal %zeroes achieved from the test datasets, when the sparsity was set to 95% 
-  	return(sparse_factor)
-    }
-
-    if(!is.null(ctrl.samples)) samplesToUse <- colnames(data)[!(colnames(data) %in% ctrl.samples)]
-    if(is.null(ctrl.samples)) samplesToUse <- colnames(data)
-    dge$Design <- design
-    sparse_factor <- Calc_Sparse_Factor(dge, samplesToUse)
 
     # normalize data
     cat("Performing normalization: ",normalization.method,"\n")
-    data <- dge$counts
     if(normalization.method == 'uq2'){
       data <- UpperQuantNorm2Step(data.frame(data), uq2.f)
       normalization.method <- 'none'
@@ -145,8 +120,8 @@ Preprocess_Samba <- function(data, design, min.guides = 1, pseudocount = 4, grou
         data <- scale(data, center=F)
         normalization.method <- 'none'
     }
-    if(sum(dge$counts != data) > 1) dge$raw_counts <- dge$counts
-    dge$counts <- data
+    #  Make DGE object and filter counts 
+    dge <- edgeR::DGEList(data, remove.zeros = T, group = group)
     
     #  Apply normalization
     if(normalization.method == 'median') dge$samples$norm.factors <- EBSeq::MedianNorm(dge$counts)
@@ -169,8 +144,6 @@ Preprocess_Samba <- function(data, design, min.guides = 1, pseudocount = 4, grou
     # return DGE object
     dge$Design <- design
     dge$GuideMap <- sgInfo
-    dge$sparse_factor <- sparse_factor
-    
     cat('Preprocessing complete!\n')
     return(dge)
 }
@@ -222,8 +195,7 @@ Analyze_Samba_Guides <- function(dge, method = 'QLF', design = NULL, coefficient
     sgRes <- merge(GuideMap, sgRes, by = 'sgRNA', all.x = F, all.y = T)
     sgRes$zscore <- scale(sgRes$logFC, center = F, scale = T)[,1]
     sgRes <- sgRes[with(sgRes, order(Statistic,decreasing = T)),]
-    sgRes$sparse_factor <- dge$sparse_factor
-    
+
     # save data
     if(!is.null(file.prefix)){
         saveRDS(fit, file = paste0(file.prefix, '_FittedData.rds'))
@@ -240,24 +212,23 @@ Analyze_Samba_Guides <- function(dge, method = 'QLF', design = NULL, coefficient
 #'
 #' @param sgRes data.frame of the results from the guide-level screen enrichment analysis. This is the output from the "Analyze_Samba_Guides" function.
 #' @param null.dist.gene logical, indicating the gene ID for control guides. This is used to generate a null distribution for gene-level analyses. Defaults to "NTC", but this can parameter can also be set to NULL to use all guides for the null distribution.
-#' @param score.method character, indicating whether to use the 'KS', 'MetaAnalysis' or 'GeneScore' method to perform gene-level analysis.
+#' @param score.method character, indicating whether to use the 'MetaAnalysis' or 'GeneScore' method to perform gene-level analysis.
 #' @param file.prefix (optional) file.path and/or character prefix to use for exporting the result tables
 #' @return data.frame of the results from the gene-level screen enrichment analysis.
 #' @export
-Analyze_Samba_Genes <- function(sgRes, null.dist.gene = 'NTC', score.method = 'KS', min.guide.per.gene = 2, use.nullData=T, file.prefix = NULL){
+Analyze_Samba_Genes <- function(sgRes, null.dist.gene = 'NTC', score.method = 'KS', min.guide.per.gene = 2, file.prefix = NULL){
     # Set defaults
     control.gene <- null.dist.gene
     hdr.gene <- 'Gene'
     fdr.threshold <- 0.1
-    if(is.null(sgRes$sparse_factor)) sgRes$sparse_factor <- 0.75
     
     # Check inputs
-    if(!(score.method %in% c('GeneScore','MetaAnalysis','KS','FDR','Mean'))) warning('Please choose either "GeneScore" or "MetaAnalysis" as a score.method!')
+    if(!(score.method %in% c('GeneScore','MetaAnalysis','KS'))) warning('Please choose either "GeneScore" or "MetaAnalysis" as a score.method!')
     
     ## Filter guide-level data (>= 2sgRNA/gene and not NA)
     sgPerGene <- plyr::ddply(sgRes, 'Gene', nrow)
-    #keep.genes <- sgPerGene[which(sgPerGene[,2] >= min.guide.per.gene), 'Gene']
-    #sgRes <- sgRes[which(sgRes$Gene %in% keep.genes),]
+    keep.genes <- sgPerGene[which(sgPerGene[,2] >= min.guide.per.gene), 'Gene']
+    sgRes <- sgRes[which(sgRes$Gene %in% keep.genes),]
     sgRes <- sgRes[!is.na(sgRes$Gene ),]
     
     ## set data for null dist
@@ -277,16 +248,23 @@ Analyze_Samba_Genes <- function(sgRes, null.dist.gene = 'NTC', score.method = 'K
     nullData <- nullData[unlist(rIndices),]
     i <- lapply(rIndices, length)
     nullData[,hdr.gene] <- paste0('NTC', lapply(1:length(i), function(x){ rep(x,i[[x]]) }) %>% unlist())
-    null.Dist.cutoff <- quantile(nullData$logFC, 1-fdr.threshold)
     
     # perform enrichment and depletion analyses
     if(score.method == 'GeneScore'){
         cat('Calculating enrichment.\n')
-        output <- GeneScoreSamba(data = sgRes, nullData = nullData, fdr.threshold = fdr.threshold, fdr.score.only=F, use.nullData=use.nullData)
+        enriched <- GeneScoreSamba(data = sgRes, nullData = nullData, fdr.threshold = fdr.threshold, direction = 1)
+        cat('Calculating depletion.\n')
+        depleted <- GeneScoreSamba(data = sgRes, nullData = nullData, fdr.threshold = fdr.threshold, direction = -1)
+        cat('Done!\n')
+        output <- merge(enriched,depleted,by = 'Gene', all = T)
     }
-    if(score.method == 'FDR'){
+    if(score.method == 'GeneFdrScore'){
       cat('Calculating enrichment.\n')
-      output <- GeneScoreSamba(data = sgRes, nullData = nullData, fdr.threshold = fdr.threshold, fdr.score.only=T, use.nullData=use.nullData)
+      enriched <- GeneScoreSamba(data = sgRes, nullData = nullData, fdr.threshold = fdr.threshold, direction = 1, fdr.score.only=T)
+      cat('Calculating depletion.\n')
+      depleted <- GeneScoreSamba(data = sgRes, nullData = nullData, fdr.threshold = fdr.threshold, direction = -1, fdr.score.only=T)
+      cat('Done!\n')
+      output <- merge(enriched,depleted,by = 'Gene', all = T)
     }
     if(score.method == 'MetaAnalysis'){
         cat('Calculating enrichment.\n')
@@ -304,7 +282,7 @@ Analyze_Samba_Genes <- function(sgRes, null.dist.gene = 'NTC', score.method = 'K
     
     
     output <- output[order(output$pval_pos, decreasing = F),]
-    output$Null.Dist.Cutoff <- null.Dist.cutoff
+    
     # save data
     if(!is.null(file.prefix)){
         write.table(output, file = paste0(file.prefix, '_GeneLevelResults.txt'), sep = '\t', quote = F, row.names = F)
@@ -377,32 +355,36 @@ MetaAnalysisSamba <- function(data, nullData, fdr.threshold, direction = 1){
 #' @param direction integer of either 1 or -1, indicating whether to perform enrichment or depletion analysis, respectively.
 #' @return data.frame of the results from the gene-level screen enrichment analysis.
 #' @export
-GeneScoreSamba <- function(data, nullData, fdr.threshold, fdr.score.only=F, use.nullData=T){
+GeneScoreSamba <- function(data, nullData, fdr.threshold, direction = 1, fdr.score.only=F){
+    data$logFC <- direction * data$logFC
+    nullData$logFC <- direction * nullData$logFC
     sg.threshold <- quantile(nullData$logFC, 1-fdr.threshold)
-
+    if(direction == 1) cat(paste0('FDR threshold for guides: ', sg.threshold,'\n'))
+    
     # Get scores
     if(fdr.score.only) {
-      if(use.nullData) nullScores <- WtSumFdrScore(nullData, sg.threshold)
-      targetScores <- WtSumFdrScore(data, sg.threshold)
+      nullScores <- WtSumFdrScore(nullData, sg.threshold, direction)
+      targetScores <- WtSumFdrScore(data, sg.threshold, direction)
     }
     if(!fdr.score.only) {
-        if(use.nullData) nullScores <- WtSumScore(nullData, sg.threshold)
-      targetScores <- WtSumScore(data, sg.threshold)
+      nullScores <- WtSumScore(nullData, sg.threshold, direction)
+      targetScores <- WtSumScore(data, sg.threshold, direction)
     }
 
     # Calculate z-score from null distribution
-    if(use.nullData) targetScores$score <- scale(targetScores$score, center = F, scale = sd(nullScores$score))[,1]
-    if(!use.nullData) targetScores$score <- scale(targetScores$score, center = F)[,1]
+    targetScores$score <- scale(targetScores$score, center = median(nullScores$score), scale = sd(nullScores$score))[,1]
     
     # Calculate p & q values
-    targetScores$pval <- 2 * pnorm(abs(targetScores$score), lower.tail = F)
-    targetScores$pval_pos <- pnorm(q=targetScores$score, lower.tail=F)
-    targetScores$pval_neg <- pnorm(q=targetScores$score, lower.tail=T)
-    targetScores$qval <- p.adjust(targetScores$pval)
-    targetScores$qval_pos <- p.adjust(targetScores$pval_pos)
-    targetScores$qval_neg <- p.adjust(targetScores$pval_neg)
-
-    return(targetScores)
+    #pval <- 2 * pnorm(abs(targetScores$score), lower.tail = F)
+    if(direction==  1) pval <- pnorm(q=targetScores$score, lower.tail=F)
+    if(direction== -1) pval <- pnorm(q=targetScores$score, lower.tail=T)
+    qval <- p.adjust(pval, 'fdr')
+    
+    # Generate output
+    output <- data.frame(targetScores, pval = pval, qval = qval)
+    ifelse(direction == 1, direction <- 'pos', direction <- 'neg')
+    colnames(output)[-1] <- paste0(colnames(output)[-1],'_',direction)
+    return(output)
 }
 
 
@@ -539,6 +521,18 @@ WtSumScore <- function(data, fdr.thresh, direction){
     data <- data[with(data, order(Gene, -logFC, decreasing = FALSE)),]
     # get the mean of the top half of grna log-FCs, using quantiles to account for difference in the #s of gRNAs/Gene
     score_tophalf <- dplyr::reframe(data, .by= 'Gene', n.grna = max(length(Gene),3), score_tophalf = sum(quantile(logFC,seq(.5,1,.5/(n.grna - 1))))/n.grna) 
+    #if(direction == 1)  score_tophalf <- dplyr::reframe(data, .by= 'Gene', score_tophalf = sum(c(0.25,0.75) * logFC[1:2])) 
+    #if(direction == -1) score_tophalf <- dplyr::reframe(data, .by= 'Gene', score_tophalf = mean(logFC[1:4], na.rm=T)) 
+    
+    #ifelse(direction==1, n.grna <- 3, n.grna <- 5)
+    #score_tophalf <- dplyr::reframe(data, .by= 'Gene', score_tophalf = sum(seq(1,.5,-(.5/(n.grna-1))) * quantile(logFC,seq(.5,1,(.5/(n.grna-1)))))/n.grna) 
+
+    #score_tophalf <- data %>% 
+    #    dplyr::group_by(Gene) %>% 
+    #    dplyr::reframe(n.grna = 5, 
+    #              score_tophalf = sum(quantile(logFC,seq(.5,1,0.125)))/n.grna) 
+    # calculate weights for filtered grna
+    #data <- data[with(data, order(Gene, -logFC, decreasing = F)),]
     if(nrow(data[which(data$logFC > fdr.thresh),]) > 0){
         score_fdr <- data[which(data$logFC > fdr.thresh),] %>% 
             dplyr::group_by(Gene) %>% 
@@ -550,11 +544,16 @@ WtSumScore <- function(data, fdr.thresh, direction){
             dplyr::mutate(wt = 0) 
     }
     # summarize weighted logFCs
+    #score_fdr <- merge(score_fdr, score_tophalf[,c('Gene', 'n.grna')], by = 'Gene')
     score_fdr <- score_fdr %>%
         dplyr::group_by(Gene) %>%
         dplyr::summarise(n_fdr_guides = length(logFC), score_fdr = sum(logFC * wt)/length(logFC))
+    # count the number of grna that pass threshold
+    #count_fdr <- plyr::count(data[which(data$logFC > fdr.thresh),'Gene'])
+    #colnames(count_fdr) <- c('Gene','n_fdr_guides')
     # merge the score_tophalf, score_fdr, and count_fdr
     scores <- merge(score_fdr, score_tophalf, by = 'Gene', all = T)
+    #scores <- merge(scores, count_fdr, by = 'Gene', all = T)
     scores[is.na(scores)] <- 0
 
     # set max multipliers
@@ -570,6 +569,18 @@ WtSumScore <- function(data, fdr.thresh, direction){
 
     #scores$score <- scale(scores$score, scale = F, center = T) %>% as.numeric()
     return(scores)
+}
+
+WtSumFdrScore <- function(data, fdr.thresh, direction){
+  # sort grna-level results by logfc
+  data <- data[with(data, order(Gene, -logFC, decreasing = FALSE)),]
+  # summarize weighted logFCs
+  scores <- dplyr::reframe(data, .by='Gene', n_fdr_guides=(sum(logFC > fdr.thresh)), 
+                              n.multiplier = (sum(logFC > fdr.thresh)+length(logFC))/length(logFC), 
+                              logFC = head(logFC, max(c(sum(logFC > fdr.thresh), 2))))
+  scores <- dplyr::reframe(scores, .by='Gene', n_fdr_guides=n_fdr_guides, score = (n.multiplier * mean(logFC)))
+  scores[is.na(scores)] <- 0
+  return(scores)
 }
 
 
@@ -618,3 +629,5 @@ UpperQuantNorm2Step <-function(X, f = 50){
 
 
 
+                
+                
