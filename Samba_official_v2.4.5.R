@@ -109,6 +109,14 @@ Preprocess_Samba <- function(data, design, min.guides = 1, pseudocount = 4, grou
     dge <- edgeR::DGEList(data, remove.zeros = T, group = group)
     
     # Calculate sparsity factor after filtering, but before data normalization
+    Calc_Sparse_Factor <- function(dge){
+  	total_counts <- dim(dge$counts[, as.logical(dge$Design[,2])])
+  	total_counts <- total_counts[1] * total_counts[2]
+  	total_zeros <- sum(dge$counts[, as.logical(dge$Design[,2])] == 0)
+  	sparse_factor <- min(total_zeros / total_counts / 0.40, 1) # note: 0.4 (rounded) is empirically a maximal %zeroes achieved from the test datasets, when the sparsity was set to 95% 
+  	return(sparse_factor)
+    }
+
     if(!is.null(ctrl.samples)) samplesToUse <- colnames(data)[!(colnames(data) %in% ctrl.samples)]
     if(is.null(ctrl.samples)) samplesToUse <- colnames(data)
     dge$Design <- design
