@@ -210,15 +210,6 @@ Analyze_Samba_Genes <- function(sgRes, null.dist.gene = 'NTC', score.method = 'K
     i <- lapply(rIndices, length)
     nullData[,hdr.gene] <- paste0('NTC', lapply(1:length(i), function(x){ rep(x,i[[x]]) }) %>% unlist())
     
-    # perform enrichment and depletion analyses
-    if(score.method == 'GeneScore'){
-        cat('Calculating enrichment.\n')
-        enriched <- GeneScoreSamba(data = sgRes, nullData = nullData, fdr.threshold = fdr.threshold, direction = 1)
-        cat('Calculating depletion.\n')
-        depleted <- GeneScoreSamba(data = sgRes, nullData = nullData, fdr.threshold = fdr.threshold, direction = -1)
-        cat('Done!\n')
-        output <- merge(enriched,depleted,by = 'Gene', all = T)
-    }
     if(score.method == 'KS'){
         cat('Calculating KS-stats\n')
         enriched <- KStest_Samba(data = sgRes, nullData = nullData, fdr.threshold = fdr.threshold, direction = 1, filter_beta = T)
@@ -234,44 +225,6 @@ Analyze_Samba_Genes <- function(sgRes, null.dist.gene = 'NTC', score.method = 'K
         write.table(output, file = paste0(file.prefix, '_GeneLevelResults.txt'), sep = '\t', quote = F, row.names = F)
     }
     
-    return(output)
-}
-
-
-#' GeneScoreSamba
-#'
-#' This function performs SAMBA gene-level aggregation, using the gene score method. Note that this is an internal function.
-#'
-#' @param data data.frame of the results from the guide-level screen enrichment analysis.
-#' @param nullData data.frame of guide-level screen enrichment data for the null distribution.
-#' @param fdr.threshold numeric between 0 and 1, indicating the FDR to use as a threshold.
-#' @param direction integer of either 1 or -1, indicating whether to perform enrichment or depletion analysis, respectively.
-#' @return data.frame of the results from the gene-level screen enrichment analysis.
-#' @export
-GeneScoreSamba <- function(data, nullData, fdr.threshold, direction = 1){
-    data$logFC <- direction * data$logFC
-    nullData$logFC <- direction * nullData$logFC
-    sg.threshold <- quantile(nullData$logFC, 1-fdr.threshold)
-    if(direction == 1) cat(paste0('FDR threshold for guides: ', sg.threshold,'\n'))
-    
-    # Get scores
-    nullScores <- WtSumScore(nullData, sg.threshold, direction)
-    targetScores <- WtSumScore(data, sg.threshold, direction)
-    
-    # Calculate z-score from null distribution
-    targetScores$score <- scale(targetScores$score, 
-                                median(nullScores$score), 
-                                sd(nullScores$score))[,1]
-    
-    # z-test
-    if(direction==  1) pval <- pnorm(q=targetScores$score, lower.tail=F)
-    if(direction== -1) pval <- pnorm(q=targetScores$score, lower.tail=T)
-    qval <- p.adjust(pval, 'fdr')
-    
-    # Generate output
-    output <- data.frame(targetScores, pval = pval, qval = qval)
-    ifelse(direction == 1, direction <- 'pos', direction <- 'neg')
-    colnames(output)[-1] <- paste0(colnames(output)[-1],'_',direction)
     return(output)
 }
 
@@ -292,20 +245,38 @@ KStest_Samba <- function(data, nullData, fdr.threshold, direction = 1, filter_be
     data <- data[order(data$logFC, decreasing = T),]
     nullData$logFC <- direction * nullData$logFC
 
+    # Bootstrap, if needed
+    bootstrap_thresh_n_guides <- median(plyr::count(data$Gene)$freq)
+    bootstrap_guides <-
+        function(x, n){
+        set.seed(42)
+        return(dqrng::dqsample(x, size = n, replace = T))
+    }
+  
     # Filter coefficients to include only the top half
+    Get_TopHalf <- function(x, n_guides){
+      if(n_guides < bootstrap_thresh_n_guides)
+        x <- bootstrap_guides(x, bootstrap_thresh_n_guides)
+      x <- head(sort(x, decreasing=T), ceiling(n_guides/2))
+      
+    }
     if(filter_beta) {
-        data <- dplyr::reframe(data, .by= 'Gene', n_guides = max(length(Gene),3), tophalf = quantile(logFC,seq(.5,1,.125))) 
+        data <- dplyr::reframe(data, .by= 'Gene', n_guides = max(length(Gene),3), 
+                               tophalf = Get_TopHalf(logFC,n_guides)) 
         data$logFC <- data$tophalf
-        nullData <- dplyr::reframe(data, .by= 'Gene', n_guides = max(length(Gene),3), tophalf = quantile(logFC,seq(.5,1,.125))) 
-        nullData$logFC <- nullData$tophalf
     }
     
     # Calculate z-score
-    data$scale <- scale(data$logFC, median(nullData$logFC), sd(nullData$logFC))[,1]
+    data$scale <- scale(data$logFC, mean(nullData$logFC), sd(nullData$logFC))[,1]
     
     # Calculate p & q values
     ifelse(direction==1, alt <- 'less', alt <- 'greater')
-    runKS <- function(x) return(ks.test(x = x, 'pnorm', alternative = alt, simulate.p.value = F, B = 10000)$p.value)
+    runKS <- function(x) {
+        r <- suppressWarnings(ks.test(x = x, 'pnorm', alternative = alt, 
+                       simulate.p.value = F, 
+                       B = 10000)$p.value)
+        return(r)
+    }
     output <- dplyr::reframe(data, score = quantile(scale, 0.75), .by = 'Gene')
     output$pval <- dplyr::reframe(data, pval = runKS(scale), .by = 'Gene')[,2]
     output$qval <- p.adjust(output$pval, 'fdr')
@@ -341,50 +312,6 @@ RandomIndexGenerator <- function(sgPerGene, nTotalGuides){
         dqrng::dqsample(1:nTotalGuides, size = min(nTotalGuides,sgPerGene[i]), replace = F)
     })
     return(randData)
-}
-
-
-#' WtSumScore
-#'
-#' This function calculates a single gene score for a given set of guide log-FC values.
-#'
-#' @param scores numeric vector of the log-FC values for all guides of a single gene.
-#' @param sg.threshold numeric, giving the logFC value of the null data that represents the FDR threshold
-#' @return numeric score of a gene.
-#' @export
-WtSumScore <- function(data, fdr.thresh, direction){
-    wt.increment <- 1/4
-    # sort grna-level results by logfc
-    data <- data[with(data, order(Gene, -logFC)),]
-    # get the mean of the top half of grna log-FCs, using quantiles to account for difference in the #s of gRNAs/Gene
-    score_tophalf <- dplyr::reframe(data, .by= 'Gene', n.grna = max(length(Gene),3), 
-                                    score_tophalf = sum(quantile(logFC,seq(0.5,1,.25)))/n.grna) 
-
-    # calculate weights for filtered grna
-    if(nrow(data[which(data$logFC > fdr.thresh),]) > 0){
-        score_fdr <- data[which(data$logFC > fdr.thresh),] %>% 
-            dplyr::group_by(Gene) %>% 
-            dplyr::mutate(wt = 1 + (wt.increment * (1:length(logFC)))) 
-        score_fdr[which(score_fdr$wt > 2),'wt'] <- 2 # cap wts
-    } else {
-        score_fdr <- data %>% 
-            dplyr::group_by(Gene) %>% 
-            dplyr::mutate(wt = 0) 
-    }
-
-    # summarize weighted logFCs
-    score_fdr <- score_fdr %>%
-        dplyr::group_by(Gene) %>%
-        dplyr::summarise(n_fdr_guides = length(logFC), score_fdr = sum(logFC * wt)/length(logFC))
-    # merge the score_tophalf, score_fdr, and count_fdr
-    scores <- merge(score_fdr, score_tophalf, by = 'Gene', all = T)
-    scores[is.na(scores)] <- 0
-    
-    scores <- data.frame(Gene = scores$Gene, 
-                         score = (scores$score_fdr + scores$score_tophalf), 
-                         n_fdr_guides = scores$n_fdr_guides)
-    
-    return(scores)
 }
 
 
