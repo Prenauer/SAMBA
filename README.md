@@ -1,5 +1,5 @@
 ## SAMBA
-CRISPR Screen analysis with moderated Bayesian statistics and adaptive gene aggregation scoring (SAMBA). 
+CRISPR Screen analysis with moderated Bayesian statistics and aggregated gene  scoring (SAMBA). 
 
 
 ## Install
