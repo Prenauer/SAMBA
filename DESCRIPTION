@@ -1,6 +1,6 @@
 Package: SAMBA
 Type: Package
-Title: CRISPR Screen analysis with moderated Bayesian statistics and adaptive gene aggregation scoring
+Title: CRISPR Screen analysis with moderated Bayesian statistics and aggregated gene scoring
 Version: 1.1.0
 Author: Paul Renauer [aut, cre]
 Authors@R: c(person("Paul", "Renauer", email = "paul.renauer@yale.edu", role=c("aut", "cre"),comment=c(ORCID = "0000-0002-8747-0552")))
