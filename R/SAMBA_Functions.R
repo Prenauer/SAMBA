@@ -13,7 +13,7 @@
 #' @param design Design matrix for fitting objects.
 #' @param coefficient Coefficient to use for comparing data models.
 #' @param contrast Contrast matrix to use for comparing data models.
-#' @param control.gene Name of the internal control guides (e.g. "NTC").
+#' @param ntc.as.null.dist Use NTCs or all guides to generate a null distribution for gene-level analyses.
 #' @param score.method Use 'MetaAnalysis' or 'GeneScore' method to perform gene-level analysis.
 #' @param test.method Use 'QLF' or 'LRT' tests.
 #' @param GuideMap (optional) data.frame with sgRNA and gene info.
