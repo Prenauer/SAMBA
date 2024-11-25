@@ -16,7 +16,8 @@ Imports:
     plyr,
     edgeR,
     limma,
-    stringr
+    stringr,
+    dqrng
 Depends:
     R (>= 4.0),
     dplyr
