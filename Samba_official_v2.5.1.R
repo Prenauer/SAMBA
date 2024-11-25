@@ -3,7 +3,7 @@
 #' @import {stringr}
 #' @import {edgeR}
 #' @import {limma}
-#' SAMBA
+#' Samba
 #'
 #' This is an all-in-one function to preprocesses and analyze read count data from a CRISPR
 #' screen. The structure of the input data is assumed to have columns labeled "sgRNA" and
@@ -20,7 +20,7 @@
 #' @param file.prefix Prefix for writing output files.
 #' @return DGEList object of the edgeR package.
 #' @export
-SAMBA <- function(data, design, coefficient = NULL, contrast = NULL, control.gene = NULL,
+Samba <- function(data, design, coefficient = NULL, contrast = NULL, control.gene = NULL,
                   score.method = 'GeneScore', test.method = 'QLF', GuideMap = NULL, file.prefix = NULL){
     
     dge <- Preprocess_Samba(data = data, design = design)
