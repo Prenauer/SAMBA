@@ -1,6 +1,6 @@
 ## SAMBA
 CRISPR Screen analysis with moderated Bayesian statistics and aggregated gene scoring (SAMBA). 
-Note that this is a working version, but there is a more finalized version is coming soon.
+Note that this is a working version, but a more finalized version is coming soon.
 
 
 ## Install
