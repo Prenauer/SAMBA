@@ -50,7 +50,7 @@ The simplest way to run SAMBA is to use the all-in-one "Samba" function, which i
 ## Run SAMBA using the count data, design matrix, and the screen samples as the coefficient.
 ##    Note that the coefficient is a character vector that indicates a column name in the design matrix.
 ##    Also note that the output is a list of sgRNA-level results and gene-level results.
-results <- Samba(data = counts, design = design, coefficient = 'screen')
+results <- Samba(data = counts, design = design, control.gene='NTC', coefficient = 'screen')
 
 ## View Gene-level results.
 View(results$GeneResults)
