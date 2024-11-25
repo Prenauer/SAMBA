@@ -6,7 +6,7 @@ Note that this is a working version, but there is a more finalized version is co
 ## Install
 ```{r}
 ## Install packages
-install.packages(devtools)  
+install.packages('devtools')  
 devtools::install_github('Prenauer/SAMBA')
 
 ## Load SAMBA
