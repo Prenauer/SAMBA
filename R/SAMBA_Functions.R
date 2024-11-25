@@ -184,6 +184,7 @@ Analyze_Samba_Genes <- function(sgRes, control.gene = NULL,
         
     }
     if(is.null(control.gene)){
+        control.gene <- ''
         sg.threshold.up <- quantile(sgRes$logFC, 0.9)
         sg.threshold.dn <- quantile(sgRes$logFC, 0.1)
     }
