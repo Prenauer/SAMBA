@@ -3,6 +3,7 @@
 #' @import {stringr}
 #' @import {edgeR}
 #' @import {limma}
+#' @import {dqrng}
 #' Samba
 #'
 #' This is an all-in-one function to preprocesses and analyze read count data from a CRISPR
