@@ -12,6 +12,8 @@
 #'
 #' @param data data.frame with read counts. Must have "sgRNA" and "Gene" columns, followed by columns with raw sample counts.
 #' @param design design matrix for the samples in "data". Note: The order of the rows must match that of the data read-counts.
+#' @param screen.names character vector of the screen sample names.
+#' @param ctrl.names character vector of the control sample names.
 #' @param coefficient character name or vector, indicating which coefficient of the linear model is tested to be equal to zero.
 #' @param contrast contrast matrix, indicating the contrast(s) of the linear model to be tested as equal to zero (optional).
 #' @param control.gene character, gene label of the internal control guides (e.g. "NTC").
@@ -22,15 +24,24 @@
 #' @param verbose logical, indicating whether to display verbose output information.
 #' @return list, contains the guide-level result data.frame and the gene-level result data.frame.
 #' @export
-Samba <- function(data, design, coefficient = NULL, contrast = NULL, 
+Samba <- function(data, design=NULL, screen.names=NULL, ctrl.names=NULL,
+                  coefficient = NULL, contrast = NULL, 
                   control.gene = NULL,score.method = 'GeneScore', 
                   test.method = 'QLF', GuideMap = NULL, file.prefix = NULL,
                   verbose=T){
-    
-    dge <- Preprocess_Samba(data = data, design = design)
-    sgRes <- Analyze_Samba_Guides(dge = dge, coefficient = coefficient, method = test.method, contrast = contrast, file.prefix = file.prefix)
-    geneRes <- Analyze_Samba_Genes(sgRes = sgRes, score.method = score.method, control.gene=control.gene, file.prefix = file.prefix)
-    
+
+    # preprocess data to generate DGE object    
+    dge <- Preprocess_Samba(data = data, design = design, 
+                            screen.names=screen.names, ctrl.names=ctrl.names)
+    # perform guide-level analysis 
+    sgRes <- Analyze_Samba_Guides(dge = dge, coefficient = coefficient, 
+                                  method = test.method, contrast = contrast, 
+                                  file.prefix = file.prefix)
+    # perform gene-level analysis 
+    geneRes <- Analyze_Samba_Genes(sgRes = sgRes, score.method = score.method, 
+                                   control.gene=control.gene, 
+                                   file.prefix = file.prefix)
+    # return guide-level and gene-level results in a list
     return(list(GuideResults = sgRes, GeneResults = geneRes))
 }
 
@@ -43,6 +54,8 @@ Samba <- function(data, design, coefficient = NULL, contrast = NULL,
 #'
 #' @param data data.frame with read counts. Must have "sgRNA" and "Gene" columns, followed by columns with raw sample counts.
 #' @param design design matrix for the samples in "data". Note: The order of the rows must match that of the data read-counts.
+#' @param screen.names character vector of the screen sample names.
+#' @param ctrl.names character vector of the control sample names.
 #' @param hdr.gene character, name of column with gene names. Defaults to "Gene".
 #' @param hdr.guide character, name of column with guide names. Defaults to "sgRNA".
 #' @param coefficient character name or vector, indicating which coefficient of the linear model is tested to be equal to zero.
@@ -50,9 +63,26 @@ Samba <- function(data, design, coefficient = NULL, contrast = NULL,
 #' @param verbose logical, indicating whether to display verbose output information.
 #' @return DGEList object of the edgeR package.
 #' @export
-Preprocess_Samba <- function(data, design, hdr.gene = 'Gene', 
+Preprocess_Samba <- function(data, design=NULL, screen.names=NULL, 
+                             ctrl.names=NULL, hdr.gene = 'Gene', 
                              hdr.guide = 'sgRNA', coefficient=NULL, 
                              verbose=T){
+    ## Check that there is either design matrix or sample names
+    # if there is no design matrix...
+    if(is.null(design)){ 
+        # if either screen.names or ctrl.names is not provided...
+        if(is.null(screen.names) | is.null(ctrl.names)){
+            # print warning
+            warning('Please provide either design matrix or sample names.')
+        }
+        # if both screen.names and ctrl.names are given...
+        if(!is.null(screen.names) & !is.null(ctrl.names)){
+            # create a design matrix from sample names.
+            design <- CreateDesignMatrix(colnames(data)[3:ncol(data)], 
+                                         screen.names, ctrl.names)
+        }
+    }
+    
     # if verbose, print message
     if(verbose) cat('Starting preprocessing.\n')
     
@@ -276,7 +306,7 @@ Analyze_Samba_Genes <- function(sgRes, control.gene = NULL,
     ## Check inputs
     # if a supported score.method is not set, print a warning
     if(!(score.method %in% c('GeneScore','KS','Riger'))) 
-        warning('Please choose either "GeneScore", "KS", or "Riger" or as a score.method!')
+        warning('Please choose either "GeneScore" or "KS" as a score.method!')
     
     # if an internal-control gene is specified...
     if(!is.null(control.gene)){
@@ -362,16 +392,7 @@ Analyze_Samba_Genes <- function(sgRes, control.gene = NULL,
                                decreasing = F),]
         if(verbose) cat('Done!\n')
     }
-    # if 'Riger' is selected...
-    if(score.method == 'Riger'){
-        if(verbose) cat('Calculating Riger-stats\n')
-        # run the modified version of riger
-        output <- RigerTest_Samba(data = sgRes, nullData = nullData)
-        # sort output based on enrichment results
-        output <- output[order(output$pval_pos, -output$adjScore, decreasing = F),]
-        if(verbose) cat('Done!\n')
-    }
-    
+
     
     ## write and/or return analysis results
     # if a prefix is provided...
@@ -569,94 +590,31 @@ KStest_Samba <- function(data, nullData, direction=1){
     ## create function for KS analysis
     # set alternative hypothesis, based on enrichment or depletion analysis
     ifelse(direction==1, alt <- 'less', alt <- 'greater')
+    # runKS function will perform two-sample KS test, comparing the logFC of
+    #   a gene to the null distribution. One-tailed p-value will be given for
+    #   enrichment or depletion.
     runKS <- function(x) return(ks.test(x = x, y=nullDist, 
                                         alternative=alt,
                                         simulate.p.value = F, 
                                         B = 10000)$p.value)
-    
+    # use runKS to get pvals for each gene set.
     output <- dplyr::reframe(data, .by = 'Gene', 
-                             score = 1, 
                              pval = runKS(logFC))
-    output$score <- rank(output$pval)
+    
+    ## Arrange output data.frame
+    # get rank of results
+    output$rank <- rank(output$pval)
+    # calculate fdr-adjusted p value.
     output$fdr <- p.adjust(output$pval)
-    # Generate output
+    # rearrange order of data.frame columns
+    output <- output[,c('Gene','score','pval','fdr')]
+    # rename score, pval, and fdr columns with either pos for enrichment or 
+    #   neg for depletion.
     ifelse(direction == 1, direction <- 'pos', direction <- 'neg')
     colnames(output)[-1] <- paste0(colnames(output)[-1],'_',direction)
+    
+    # return results
     return(output)
-}
-
-#' RigerTest_Samba
-#'
-#' This function performs riger gene-level aggregation, using a modified 
-#'   Kolmogorov-Smirnov test. Note that this is an internal function.
-#'
-#' @param data data.frame of the results from the guide-level screen enrichment analysis.
-#' @param nullData data.frame of guide-level screen enrichment data for the null distribution.
-#' @return data.frame of the results from the gene-level screen enrichment analysis.
-#' @export
-RigerTest_Samba <- function(data, nullData){
-    ScoreGeneSet_Riger <- function(scores, n_total_guides, score.rank, wts=NULL, alpha=1) {
-        n_guides <- length(scores)
-        if(is.null(wts)) wts <- rep(1, length(scores))
-        nonTargetSetScoreWeight = -1 / (n_total_guides - length(scores))
-        weightedTargetSetScores = abs(scores * wts)
-        sumOfWeightedTargetSetScores = sum(weightedTargetSetScores^alpha)
-        # proportion of wtScore
-        targetHairpinIndexToScoreMap <- weightedTargetSetScores / sumOfWeightedTargetSetScores        
-        orderedscore.rank = sort(score.rank)
-        cumulativeScore = 0
-        maxCumulativeScore = 0
-        minCumulativeScore = 0
-        lastTargetHairpinIndex = -1
-        for (i in 1:length(orderedscore.rank)) {
-            targetHairpinIndex = orderedscore.rank[i]
-            numSkippedNonTargetSetScores = targetHairpinIndex - lastTargetHairpinIndex - 1
-            # because nonTargetSetScoreWeight is negative, no need to update maxCumulativeScore here
-            cumulativeScore = cumulativeScore + (numSkippedNonTargetSetScores * nonTargetSetScoreWeight)
-            minCumulativeScore = min(minCumulativeScore, cumulativeScore)
-            # because the target hairpin score is positive, no need to update minCumulativeScore here
-            cumulativeScore = cumulativeScore + targetHairpinIndexToScoreMap[i]
-            maxCumulativeScore = max(maxCumulativeScore, cumulativeScore)
-            lastTargetHairpinIndex = targetHairpinIndex
-        }
-        numSkippedNonTargetSetScores = n_total_guides - lastTargetHairpinIndex - 1
-        # because nonTargetSetScoreWeight is negative, no need to update maxCumulativeScore here
-        cumulativeScore = cumulativeScore + (numSkippedNonTargetSetScores * nonTargetSetScoreWeight)
-        minCumulativeScore = min(minCumulativeScore, cumulativeScore)
-        if (abs(maxCumulativeScore) > abs(minCumulativeScore)){
-            return(signif(maxCumulativeScore, 5))
-        } else{
-            return(signif(minCumulativeScore, 5))
-        }
-    }
-    GeneScoreAdjuster_Riger <- function(x, nullScores) {
-        positiveScoreAdjustmentFactor = mean(nullScores[which(nullScores >= 0)])
-        negativeScoreAdjustmentFactor = -1 * mean(nullScores[which(nullScores < 0)])
-        x[which(x >= 0)] <- x[which(x >= 0)]/positiveScoreAdjustmentFactor
-        x[which(x < 0)] <-  x[which(x < 0)]/negativeScoreAdjustmentFactor
-        return(x)
-    }
-    # for each gene
-    # calculate score
-    n_total_guides <- nrow(data)
-    data$score.rank <- rank(data$logFC)
-    gs <- dplyr::reframe(data, .by='Gene', geneScore=
-                             ScoreGeneSet_Riger(logFC, n_total_guides, score.rank))
-    # calculate scores for nullGenes
-    n_total_guides <- nrow(nullData)
-    nullData$score.rank <- rank(nullData$logFC)
-    ns <- dplyr::reframe(nullData, .by='Gene', geneScore=
-                             ScoreGeneSet_Riger(logFC, n_total_guides, score.rank))
-    # adjust score
-    gs$adjScore <- GeneScoreAdjuster_Riger(gs$geneScore, ns$geneScore)
-    # calculate proportion of random scores that are better
-    ns <- sort(ns$geneScore)
-    gs$pval_pos <- (lapply(gs$geneScore, function(s) sum(s > ns)) %>% unlist())/length(ns)
-    gs$pval_neg <- (lapply(gs$geneScore, function(s) sum(s < ns)) %>% unlist())/length(ns)
-    # calculate fdr-adjusted p values
-    gs$fdr_pos <- p.adjust(gs$pval_pos)
-    gs$fdr_neg <- p.adjust(gs$pval_neg)
-    return(gs)
 }
 
 
@@ -726,5 +684,31 @@ WtSumScore <- function(data, fdr.thresh){
     
     # return results
     return(scores)
+}
+
+
+#' CreateDesignMatrix
+#'
+#' This function generates a simple design matrix when the user inputs a count file and a 
+#' list of names for the screen and control samples.
+#'
+#' @param hdr.names character vector of the count data column names.
+#' @param screen.names character vector of the screen sample names.
+#' @param ctrl.names character vector of the control sample names.
+#' @return data.frame of the design matrix.
+#' @export
+CreateDesignMatrix <- function(hdr.names, screen.names, ctrl.names){
+    # check if the input names are in the column-names for the count data
+    if(sum(hdr.names %in% c(screen.names, ctrl.names)) != length(hdr.names)){
+        warning('The provided sample names do not match the count data header.')
+    }
+    
+    # create design matrix with intercept column, and a "screen" column, where
+    #   screen samples have a 1.
+    design <- data.frame(intercept=1, 
+                         screen=as.integer(hdr.names %in% screen.names))
+    
+    # return design matrix
+    return(design)
 }
 
