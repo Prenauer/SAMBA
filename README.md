@@ -1,10 +1,11 @@
 ## SAMBA
 CRISPR Screen analysis with moderated Bayesian statistics and aggregated gene scoring (SAMBA). 
-This analysis algorithm employs negative binomial generalized linear models (GLMs) to fit CRISPR 
-screen data, and it analyzes guide-level enrichment/depletion using moderated Bayesian statistics 
-and quasi-likelihood F tests. Gene-level scores are then calculated as a modified weighted sum 
-and compared with randomized null distribution to calculate enrichment and depletion statistics 
-for the screen.
+
+This analysis algorithm fit CRISPR screen data with negative binomial generalized linear models
+(GLMs) with guide-wise quasi-dispersion estimates using empirical Bayes moderation. The 
+posterior Bayesian estimates for each guide are then used to calculate gene-level scores, which
+are modified weighted sum algorithm. P values are calculated for each gene, based on the 
+distribution of scores that are generated from scrambled sets of guides (dummy genes). 
 
 
 ## Install
