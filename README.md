@@ -3,9 +3,9 @@ CRISPR Screen analysis with moderated Bayesian statistics and aggregated gene sc
 
 This analysis algorithm fit CRISPR screen data with negative binomial generalized linear models
 (GLMs) with guide-wise quasi-dispersion estimates using empirical Bayes moderation. The 
-posterior Bayesian estimates for each guide are then used to calculate gene-level scores, which
-are modified weighted sum algorithm. P values are calculated for each gene, based on the 
-distribution of scores that are generated from scrambled sets of guides (dummy genes). 
+posterior Bayesian estimates for each guide are then used to calculate gene-level scores with 
+a modified weighted-sum algorithm. For each gene score, p values are calculated based on a null 
+distribution of randomly sampled guide-sets (dummy genes). 
 
 
 ## Install
