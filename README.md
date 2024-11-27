@@ -1,6 +1,10 @@
 ## SAMBA
 CRISPR Screen analysis with moderated Bayesian statistics and aggregated gene scoring (SAMBA). 
-Note that this is a working version, but a more finalized version is coming soon.
+This analysis algorithm employs negative binomial generalized linear models (GLMs) to fit CRISPR 
+screen data, and it analyzes guide-level enrichment/depletion using moderated Bayesian statistics 
+and quasi-likelihood F tests. Gene-level scores are then calculated as a modified weighted sum 
+and compared with randomized null distribution to calculate enrichment and depletion statistics 
+for the screen.
 
 
 ## Install
@@ -14,9 +18,15 @@ library(SAMBA)
 ```
 
 ## Setting up the data
-#### All you need to run SAMBA is a (1) dataframe of count data and (2) a design matrix. Each are described below.
-##### (1) Dataframe of sgRNA counts
-This needs the following columns: sgRNA, Gene, counts. See the example "counts" dataset with four control and four screen samples below.
+#### All you need to run SAMBA is a (1) dataframe of count data and (2) sample names. 
+The example below demonstrates a simple screen analysis. However, more complex analyses
+are possible by supplying a design matrix, and even a contrast matrix, to take full 
+advantage of the GLM capabilities of SAMBA. 
+
+##### (1) Get dataframe of sgRNA counts
+This needs the following columns: sgRNA, Gene, counts. See the example "counts" 
+dataset with four control and four screen samples below.
+
 ```{r}
 ## Create 4 screen and 4 control samples, each with random counts of 80,000 sgRNA.
 samples.screen <- sapply(1:4, function(x) rnbinom(80000, mu = 1000, size = 0.2))  
@@ -24,10 +34,11 @@ samples.ctrl <- sapply(1:4, function(x) rnbinom(80000, mu = 1000, size = 1))
 
 ## Generate names for the sgRNAs and genes included in the screen library.
 library.sgrna <- sapply(1:80000, function(x) paste0('sgRNA_',x))  
-library.gene <- c(lapply(1:(79000/4), function(x) rep(paste0('Gene_',x),4)) %>% unlist(), 
+library.gene <- c(unlist(lapply(1:(79000/4), function(x) rep(paste0('Gene_',x),4))), 
                   rep('NTC',1000))
 
-## Create a dataframe with the CRISPR library information, followed by the sgRNA counts for each sample.
+## Create a dataframe with the CRISPR library information, followed by the sgRNA counts
+##    for each sample.
 counts <- data.frame(sgRNA = library.sgrna,
                      Gene = library.gene,
                      samples.ctrl,
@@ -37,22 +48,28 @@ colnames(counts)[3:10] <- c(paste0('Ctrl_',1:4), paste0('Screen_',1:4))
 head(counts)
 ```
 
-##### (2) Design matrix
-This matrix simply states which samples are the control or screen samples. You can borrow the code below to designate your samples with a 0 = control or 1 = screen. Note that the order of the samples in the design matrix must match the order of the samples in the "counts" dataset. You can also use more complicated design matrices, similar to edgeR analyses.
+##### (2) Get sample names
+Create character vectors of the screen samples and control samples.
 ```{r}
-screen <- c(0,0,0,0,1,1,1,1)  
-design <- model.matrix(~ screen)
+screen.names <- paste0('Screen_',1:4)
+ctrl.names <- paste0('Ctrl_',1:4)
 ```
 
 ## Run the analysis
-The simplest way to run SAMBA is to use the all-in-one "Samba" function, which is demonstrated below.
+The simplest way to run SAMBA is to use the all-in-one "Samba" function, which is 
+demonstrated below.
 ```{r}
-## Run SAMBA using the count data, design matrix, and the screen samples as the coefficient.
-##    Note that the coefficient is a character vector that indicates a column name in the design matrix.
-##    Also note that the output is a list of sgRNA-level results and gene-level results.
-results <- Samba(data = counts, design = design, control.gene='NTC', coefficient = 'screen')
+## Run SAMBA using the count data, the sample 
+##    Note that Samba works better when a non-targeting control is used. In the
+##    example dataset, these are named "NTC". Also note that the output is a list 
+##    of sgRNA-level results and gene-level results.
+results <- Samba(data = counts,
+    screen.names=screen.names,
+    ctrl.names=ctrl.names,
+    control.gene='NTC',
+    coefficient = 'screen')
 
 ## View Gene-level results.
-View(results$GeneResults)
+head(results$GeneResults)
 ```
 
