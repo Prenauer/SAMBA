@@ -10,4 +10,12 @@
 #' @author Paul Renauer \email{paul.renauer@yale.edu}
 #'
 #' @name SAMBA
+#'
+#' @import dplyr
+#' @import stringr
+#' @import edgeR
+#' @import limma
+#' @import dqrng
+#' @import utils
+#' @import stats
 NULL
