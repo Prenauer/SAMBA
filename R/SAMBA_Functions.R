@@ -24,6 +24,12 @@ Samba <- function(data, design=NULL, screen.names=NULL, ctrl.names=NULL,
                   test.method = 'QLF', GuideMap = NULL, file.prefix = NULL,
                   verbose=T){
 
+    # if both screen.names and ctrl.names are given...
+    if(!is.null(screen.names) & !is.null(ctrl.names)){
+        # set the coefficient to 'screen'
+        coefficient <- 'screen'
+    }
+
     # preprocess data to generate DGE object
     dge <- Preprocess_Samba(data = data, design = design,
                             screen.names=screen.names, ctrl.names=ctrl.names)
@@ -196,15 +202,6 @@ Analyze_Samba_Guides <- function(dge, method = 'QLF', design = NULL,
                                  coefficient = NULL, contrast = NULL,
                                  GuideMap = NULL, file.prefix = NULL,
                                  verbose = T){
-    ## Check for valid inputs
-    # check that there is either a coefficient or a contrast
-    if(!xor(is.null(coefficient), is.null(contrast)))
-        warning('Please input a valid coefficient or contrast!')
-    # check that QLF or LRT is indicated
-    if(!(method %in% c('QLF','LRT')))
-        warning('Please choose either "LRT" or "QLF" as an analysis method!')
-
-
     ## Get design matrix and guide info
     # if no guidemap is provided, get it from the DGE
     if(is.null(GuideMap)) GuideMap <- dge$GuideMap
@@ -213,6 +210,18 @@ Analyze_Samba_Guides <- function(dge, method = 'QLF', design = NULL,
         warning('Please provide a dataframe that maps guides to genes!')
     # get design info from DGE
     if(is.null(design)) design <- dge$Design
+
+    ## Check for valid inputs
+    # check that there is either a coefficient or a contrast
+    if(!xor(is.null(coefficient), is.null(contrast))){
+        # try to designate a coefficient from design matrix
+        coefficient <- colnames(design)[ncol(design)]
+        warning(paste0('No coefficient provided. Using "',coefficient,
+                       '" as the coefficient.'))
+    }
+    # check that QLF or LRT is indicated
+    if(!(method %in% c('QLF','LRT')))
+        warning('Please choose either "LRT" or "QLF" as an analysis method!')
 
 
     ## sgRNA-level analysis
