@@ -1,7 +1,7 @@
 Type: Package
 Package: SAMBA
-Title: CRISPR Screen analysis with moderated Bayesian statistics and
-    aggregated gene scoring
+Title: CRISPR Screen Analysis Method with emperical Bayes estimation for
+    Aggregated gene scoring
 Version: 1.2.5
 Authors@R: 
     person("Paul", "Renauer", , "paul.renauer@yale.edu", role = c("aut", "cre"),
@@ -10,10 +10,9 @@ Author: Paul Renauer [aut, cre]
 Maintainer: Paul Renauer <paul.renauer@yale.edu>
 Description: This analysis algorithm employs generalized linear models
     (GLMs) to fit CRISPR screen data, and it analyzes guide-level
-    enrichment/depletion using moderated Bayesian statistics and
-    quasi-likelihood F tests. Gene-level scores are then calculated and
-    compared with a null distribution to calculate enrichment and
-    depletion for the screen.
+    enrichment/depletion using moderated Bayesian statistics. 
+    Gene-level scores are then calculated and compared with a null 
+    distribution to determine enrichment and depletion for the screen.
 License: GPL (>= 3)
 Depends:
     R (>= 4.0)

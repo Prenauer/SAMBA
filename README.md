@@ -1,5 +1,6 @@
 ## SAMBA
-CRISPR Screen analysis with moderated Bayesian statistics and aggregated gene scoring (SAMBA). 
+CRISPR Screen Analysis Method with emperical Bayes estimation for
+    Aggregated gene scoring (SAMBA). 
 
 This analysis algorithm fit CRISPR screen data with negative binomial generalized linear models
 (GLMs) with guide-wise quasi-dispersion estimates using empirical Bayes moderation. The 
