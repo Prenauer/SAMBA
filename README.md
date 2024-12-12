@@ -8,6 +8,12 @@ posterior Bayesian estimates for each guide are then used to calculate gene-leve
 a modified weighted-sum algorithm. For each gene score, p values are calculated based on a null 
 distribution of randomly sampled guide-sets (dummy genes). 
 
+<img src="figures/Samba_flowchart_v1.3.png" />
+
+## Benchmarking SAMBA performance for enrichment screens and with sparse datasets
+To assess the performance of SAMBA to detect screen enrichment with sparse datasets, we benchmarked SAMBA against popular CRISPR screen analysis algorithms: BAGEL2 (Kim and Hart, Genome Med 2021), CB2 (Jeong et al., Genome Res 2019), JACKS (Allen et al., Genome Res 2019), MAGeCK (Li et al., Genome Biol 2014), PBNPA (Jia et al., BMC Genomics 2017), and Riger (RigerJ Java implementation: https://github.com/broadinstitute/rigerj). Specifically, the algorithms were used to analyze 71 CRISPR screen datasets of cancer cell proliferation/survival, generated from five large-scale publications (Wang et al., Science 2015; Wang et al., Cell 2017; Aguirre et al., Cancer Discov 2016; Meyers et al., Nat Genet 2017), and by assessing  area-under-curve (AUC) values. AUC was calculated with p values as the predictors for tumor suppressor genes (TSG; COSMIC database: https://cancer.sanger.ac.uk/cosmic; filtered for hallmark TSG; accessed on July 20, 2022) as a response of screen enrichment, or essential genes as a response of screen depletion (Hart et al., Cell 2015). We also summarized specificity and sensitivity using partial-AUC analyses (range: 0.8-1) across all of the datasets. AUC and partial-AUC values were also assessed in datasets where sparsity was simulated by randomly assigning a specified number of zeros, using probability weights determined by the counts in the control samples. Lastly, statistical comparisons were made by one-way ANOVA tests with post-hoc analyses using the Tukey Honest-Significant-Differences method (TukeyHSD). * < 0.05; ** < 1e-2; *** < 1e-3; **** < 1e-4.
+
+<img src="figures/Samba_benchmarking_v1.3.png" />
 
 ## Install
 ```{r}
@@ -18,6 +24,7 @@ devtools::install_github('Prenauer/SAMBA')
 ## Load SAMBA
 library(SAMBA)
 ```
+
 
 ## Setting up the data
 #### All you need to run SAMBA is a (1) dataframe of count data and (2) sample names. 
