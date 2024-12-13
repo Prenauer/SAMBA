@@ -8,12 +8,29 @@ posterior Bayesian estimates for each guide are then used to calculate gene-leve
 a modified weighted-sum algorithm. For each gene score, p values are calculated based on a null 
 distribution of randomly sampled guide-sets (dummy genes). 
 
+## Description
+The SAMBA R package analyzes guide-level statistics and gene-level statistics using a workflow detailed in the figure below. Briefly, guide count data are preprocessed by adding a pseudo-count to all data instead of filtering low-count guides. This is a softer approach to distinguish low and high counts, rather than using a hard threshold  (Allen et al., Genome Res 2019). The data were then analyzed for guide-level changes using the edgeR package (Lun et al., Methods Mol Biol 2016) with TMMwsp normalization, effective for sparse data, and by fitting a negative binomial generalized linear model (GLM) with quasi-dispersion estimates and guide-detection weights, calculated using a sigmoid function of the proportion of non-control samples that had counts above a minimum threshold (5% quantile of all counts). Guide-level changes were analyzed by quasi-likelihood F tests, and guide scores were defined as the posterior Bayes estimates for each guide. Gene-level scores were then calculated, by adding (1) a baseline measurement for each gene (sum of guide-score quartiles Q2-4), and (2) a weighted sum of the guides whose scores are greater than the 90th percentile (representing a 10% FDR, similar to MAGeCK RRA (Li et al., Genome Biol 2014)). The gene scores are then normalized to the mean scores from scrambled “null-genes”. P values are then estimated from the normal probability distribution of normalized gene scores, and FDR-adjusted p values are calculated.
+
 <img src="figures/Samba_flowchart_v1.3.png" />
 
-## Benchmarking SAMBA performance for enrichment screens and with sparse datasets
-To assess the performance of SAMBA to detect screen enrichment with sparse datasets, we benchmarked SAMBA against popular CRISPR screen analysis algorithms: BAGEL2 (Kim and Hart, Genome Med 2021), CB2 (Jeong et al., Genome Res 2019), JACKS (Allen et al., Genome Res 2019), MAGeCK (Li et al., Genome Biol 2014), PBNPA (Jia et al., BMC Genomics 2017), and Riger (RigerJ Java implementation: https://github.com/broadinstitute/rigerj). Specifically, the algorithms were used to analyze 71 CRISPR screen datasets of cancer cell proliferation/survival, generated from five large-scale publications (Wang et al., Science 2015; Wang et al., Cell 2017; Aguirre et al., Cancer Discov 2016; Meyers et al., Nat Genet 2017), and by assessing  area-under-curve (AUC) values. AUC was calculated with p values as the predictors for tumor suppressor genes (TSG; COSMIC database: https://cancer.sanger.ac.uk/cosmic; filtered for hallmark TSG; accessed on July 20, 2022) as a response of screen enrichment, or essential genes as a response of screen depletion (Hart et al., Cell 2015). We also summarized specificity and sensitivity using partial-AUC analyses (range: 0.8-1) across all of the datasets. AUC and partial-AUC values were also assessed in datasets where sparsity was simulated by randomly assigning a specified number of zeros, using probability weights determined by the counts in the control samples. Additional comparisons were performed using relative AUC values, which were calculated as the difference of each AUC from the median AUC of that specific screen dataset. Lastly, statistical comparisons were made by one-way ANOVA tests with post-hoc analyses using the Tukey Honest-Significant-Differences method (TukeyHSD). * < 0.05; ** < 1e-2; *** < 1e-3; **** < 1e-4.
+## Benchmarking SAMBA performance for enrichment analysis and sparse data
+SAMBA was developed for enrichment analyses of sparse CRISPR screen data, which is a common occurance for in vivo screens of immune cells (Zhou and Renauer et al., Immuno Rev 2023). To assess the performance of SAMBA, we benchmarked it against six popular CRISPR screen analysis algorithms: BAGEL2 (Kim and Hart, Genome Med 2021), CB2 (Jeong et al., Genome Res 2019), JACKS (Allen et al., Genome Res 2019), MAGeCK (Li et al., Genome Biol 2014), PBNPA (Jia et al., BMC Genomics 2017), and Riger (RigerJ Java implementation: https://github.com/broadinstitute/rigerj). Specifically, the algorithms were used to analyze 71 CRISPR screen datasets of cancer cell proliferation/survival, generated from five large-scale publications (Wang et al., Science 2015; Wang et al., Cell 2017; Aguirre et al., Cancer Discov 2016; Meyers et al., Nat Genet 2017)
 
-<img src="figures/Samba_benchmarking_v1.3.png" />
+<img src="figures/Samba_MethodComp_Flowchart.png" />
+
+The overall performance of each method was compared using area-under-curve (AUC) values calculated with p values as the predictors for tumor suppressor genes (TSG; COSMIC database: https://cancer.sanger.ac.uk/cosmic; filtered for hallmark TSG; accessed on July 20, 2022) as a response of screen enrichment, or essential genes as a response of screen depletion (Hart et al., Cell 2015). Analysis specificity was then assessed by the partial-AUC (pAUC) with a true-positive rate > 90%, and sensitivity by the pAUC with a false-positive rate < 10%. In addition, all performance metrics were assessed in datasets where sparsity was simulated by randomly assigning a specified number of zeros, using probability weights determined by the counts in the control samples. 
+
+When data sparsity was simulated in the testing data, SAMBA demonstrated robust performance for enrichment analysis specificity, sensitivity, and overall predictive capabilities, even in datasets where 90% of guides were undetected in each screen sample (**Figures below**). SAMBA was also benchmarked for the depletion of essential genes in the testing datasets. While SAMBA significantly improved overall depletion-screen performance to all methods other than BAGEL2 at baseline sparseness, SAMBA only performed modestly in depletion analyses with increasing sparsity (**Figures below**). 
+
+The line plots below show the performance characteristics of different analysis methods, when guide detection is decreased (aka increased sparsity) among screen samples. Trendlines are the loess curves (opaque line) of AUC/pAUC values at each data sparsity level, shown with the standard error +/- the mean (shaded line).
+
+<img src="figures/Samba_MethodComp_LinePlots.png" />
+
+Box plots showing the performance characteristics of different analysis methods at different levels of data sparsity. Each screen analysis result is shown by a dot, the mean +/- standard error is depicted by the boxes, and error bars are shown for the ANOVA analysis of rAUCs with post-hoc analysis using the Tukey method. Error bars are only shown for comparisons with SAMBA, and significance is based on FDR-adjusted p values. * < 0.05; ** < 1e-2; *** < 1e-3; **** < 1e-4.
+
+<img src="figures/Samba_MethodComp_DotPlots.png" />
+
+
 
 ## Install
 ```{r}
@@ -64,7 +81,7 @@ screen.names <- paste0('Screen_',1:4)
 ctrl.names <- paste0('Ctrl_',1:4)
 ```
 
-## Run the analysis
+## Running the analysis
 The simplest way to run SAMBA is to use the all-in-one "Samba" function, which is 
 demonstrated below.
 ```{r}
